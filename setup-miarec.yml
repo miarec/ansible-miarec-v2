@@ -1,0 +1,100 @@
+---
+
+# ------------------------------------------------
+# Deploy MiaRec Web UI and celery task manager
+# ------------------------------------------------
+- name: Deploy MiaRec Web application
+  hosts:
+    - web
+    - celery
+    - celerybeat
+  pre_tasks:
+    - name: Include custom vars
+      include_vars: override_vars/custom.yml
+      failed_when: false
+
+    - set_fact:
+        miarecweb_db_host: "{{ hostvars[groups.db.0].private_ip_address }}"
+        miarecweb_redis_host: "{{ hostvars[groups.redis.0].private_ip_address }}"
+        miarecweb_install_apache: "{{ 'web' in group_names }}"
+        miarecweb_install_celeryd: "{{ 'celery' in group_names }}"
+        miarecweb_install_celerybeat: "{{ 'celerybeat' in group_names }}"
+        python_install_from_source: "{{ python_install_from_source|default(true)|bool }}"
+
+    - name: Discover Python3 version when installed from package
+      block:
+      - name: Get package installed python3 version
+        shell: python3 --version
+        register: _installed_python_version
+
+      - name: Get python install directory
+        shell: which python3
+        register: _installed_python_install_dir
+
+      - name: Set Python3 version and Install Directory
+        set_fact:
+          python_version: "{{ _installed_python_version.stdout | split(' ') | last }}"
+          python_install_dir: "{{ _installed_python_install_dir.stdout | split('/bin') | first }}"
+
+      when: not python_install_from_source|bool
+
+    - name: Discover Sox path when installed from package
+      block:
+      - name: Check if sox is installed
+        shell: which sox
+        register: _installed_sox_path
+
+      - name: Set path to sox
+        set_fact:
+          sox_path: "{{ _installed_sox_path.stdout }}"
+
+      when: not sox_install_from_source|bool
+
+    - debug: var=miarecweb_db_host
+    - debug: var=miarecweb_redis_host
+    - debug: var=python_verison
+    - debug: var=sox_path
+
+  roles:
+    - role: 'miarecweb'
+  tags: 'miarecweb'
+
+
+# ------------------------------------------------
+# Deploy MiaRec recorder
+# ------------------------------------------------
+- name: Deploy MiaRec Recorder application
+  hosts: recorder
+  pre_tasks:
+    - name: Include custom vars
+      include_vars: override_vars/custom.yml
+      failed_when: false
+
+    - set_fact:
+        miarec_db_host: "{{ hostvars[groups.db.0].private_ip_address }}"
+        miarec_redis_host: "{{ hostvars[groups.redis.0].private_ip_address }}"
+        miarec_http_call_events_host: "{{ hostvars[groups.web.0].private_ip_address }}"
+        miarec_rest_api_permitted_hosts: "{{ groups['web'] | map('extract', hostvars, ['private_ip_address']) | join(';') }}"
+
+    - debug: var=miarec_db_host
+    - debug: var=miarec_redis_host
+    - debug: var=miarec_http_call_events_host
+    - debug: var=miarec_rest_api_permitted_hosts
+  roles:
+    - role: 'miarec'
+  tags: 'miarec'
+
+
+# ------------------------------------------------
+# Deploy MiaRec Live Monitoring
+# ------------------------------------------------
+- name: Deploy MiaRec Live Monitoring
+  hosts: livemon
+  pre_tasks:
+    - name: Include custom vars
+      include_vars: override_vars/custom.yml
+      failed_when: false
+
+  roles:
+    - role: 'miarec_livemon'
+  tags: 'miarec_livemon'

@@ -1,0 +1,39 @@
+---
+- src: https://github.com/miarec/ansible-role-apache
+  name: apache
+
+- src: https://github.com/miarec/ansible-role-disable-selinux
+  name: disable-selinux
+
+- src: https://github.com/miarec/ansible-role-letsencrypt
+  name: letsencrypt
+
+- src: https://github.com/miarec/ansible-role-miarec
+  name: miarec
+
+- src: https://github.com/miarec/ansible-role-miarec-screen
+  name: miarec-screen
+
+- src: https://github.com/miarec/ansible-role-miarec_livemon
+  name: miarec_livemon
+
+- src: https://github.com/miarec/ansible-role-miarecweb
+  name: miarecweb
+
+- src: https://github.com/miarec/ansible-role-pgbouncer
+  name: pgbouncer
+
+- src: https://github.com/miarec/ansible-postgresql
+  name: postgresql
+
+- src: https://github.com/miarec/ansible-python
+  name: python
+
+- src: https://github.com/miarec/ansible-role-redis
+  name: redis
+
+- src: https://github.com/miarec/ansible-sox-role
+  name: sox
+
+# - src: https://github.com/miarecdevops/ansible-role-teleport
+#   name: teleport

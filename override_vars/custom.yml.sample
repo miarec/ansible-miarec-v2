@@ -1,0 +1,11 @@
+---
+# miarecweb_version: 2024.8.20.0
+# miarec_version: 2024.7.9.1
+# miarec_screen_version: 2024.6.2.0
+# miarec_livemon_version: 0.1.0.183
+
+## Use command `pwgen -s 32 1` to generate random password
+# secret_db_password = <GENERATE-RANDOM-PASSWORD-HERE>
+
+## Use command `pwgen -s 32 1` to generate random password
+# miarecweb_secret = <GENERATE-RANDOM-PASSWORD-HERE>

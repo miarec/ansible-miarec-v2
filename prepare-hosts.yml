@@ -1,0 +1,264 @@
+---
+# ------------------------------------------------
+# Install database
+# ------------------------------------------------
+- name: Install PostgreSQL
+  hosts: db
+  become: true
+
+  pre_tasks:
+    - name: Include custom vars
+      include_vars: override_vars/custom.yml
+      failed_when: false
+
+    - name: Define connection values
+      set_fact:
+        postgresql_pg_hba_custom:
+          - comment: 'IPv4 local connections:'
+            address: '127.0.0.1/32'
+            type: host
+            database: all
+            user: "{{ miarec_db_user }}"
+            method: 'md5'
+
+          - comment: 'IPv6 local connections:'
+            address: '::1/128'
+            type: host
+            database: all
+            user: "{{ miarec_db_user }}"
+            method: 'md5'
+
+      when: not install_pgbouncer | default(False) | bool
+
+    - name: Define connection rule for Recorder and Web servers
+      set_fact:
+        tmp_rule:
+          comment: "IPv4 connection from {{ hostvars[item].inventory_hostname }}:"
+          address: "{{ hostvars[item].private_ip_address }}/32"
+          user: "{{ miarec_db_user }}"
+          type: host
+          database: "{{ miarec_db_name }}"
+          method: 'md5'
+      with_items: "{{ groups.recorder + groups.web }}"
+      when: not install_pgbouncer | default(False) | bool and hostvars[item].private_ip_address != hostvars[inventory_hostname].private_ip_address
+      register: tmp_pg_hba_rules
+
+    - name: Print tmp_pg_hba_rules
+      debug:
+        var: tmp_pg_hba_rules
+      when: not install_pgbouncer | default(False) | bool
+
+    - name: Define pg_hba_rules
+      set_fact:
+        pg_hba_rules: "{{ tmp_pg_hba_rules.results | selectattr('ansible_facts', 'defined') | map(attribute='ansible_facts.tmp_rule') | list }}"
+      when: not install_pgbouncer | default(False) | bool
+
+    - name: Render postgresql_pg_hba_custom
+      set_fact:
+        postgresql_pg_hba_custom: "{{ postgresql_pg_hba_custom + pg_hba_rules }}"
+        # Listen on all interfaces. By default, it listens on localhost only
+        postgresql_listen_addresses: "*"
+      when: not install_pgbouncer | default(False) | bool and pg_hba_rules | length > 0
+
+    - name: Print postgresql_pg_hba_custom
+      debug:
+        var: postgresql_pg_hba_custom
+      when: not install_pgbouncer | default(False) | bool
+
+  roles:
+    - role: 'postgresql'
+
+  tags: 'postgresql'
+
+
+# ------------------------------------------------
+# Install PGBouncer connection pooler
+# ------------------------------------------------
+- name: Install PGBouncer
+  hosts: db
+  become: true
+
+  pre_tasks:
+    - name: Include custom vars
+      include_vars: override_vars/custom.yml
+      failed_when: false
+
+    - name: Set pgbouncer_hba_custom
+      set_fact:
+        pgbouncer_hba_custom:
+          - comment: 'IPv4 local connections:'
+            address: '127.0.0.1/32'
+            type: host
+            database: all
+            user: "{{ miarec_db_user }}"
+            method: 'md5'
+
+          - comment: 'IPv6 local connections:'
+            address: '::1/128'
+            type: host
+            database: all
+            user: "{{ miarec_db_user }}"
+            method: 'md5'
+      when: install_pgbouncer | default(False) | bool
+
+    - name: Define tmp_rule
+      set_fact:
+        tmp_rule:
+          comment: "IPv4 connection from {{ hostvars[item].inventory_hostname }}:"
+          address: "{{ hostvars[item].private_ip_address }}/32"
+          user: "{{ miarec_db_user }}"
+          type: host
+          database: "{{ miarec_db_name }},pgbouncer"
+          method: 'md5'
+      with_items: "{{ groups.recorder + groups.web }}"
+      when: install_pgbouncer | default(False) | bool and hostvars[item].private_ip_address != hostvars[inventory_hostname].private_ip_address
+      register: tmp_pg_hba_rules
+
+    - name: Print tmp_pg_hba_rules
+      debug:
+        var: tmp_pg_hba_rules
+      when: install_pgbouncer | default(False) | bool
+
+    - name: Define pg_hba_rules
+      set_fact:
+        pg_hba_rules: "{{ tmp_pg_hba_rules.results | selectattr('ansible_facts', 'defined') | map(attribute='ansible_facts.tmp_rule') | list }}"
+      when: install_pgbouncer | default(False) | bool
+
+    - name: Print pg_hba_rules
+      debug:
+        var: pg_hba_rules
+      when: install_pgbouncer | default(False) | bool
+
+    - name: Render pgbouncer_hba_custom
+      set_fact:
+        pgbouncer_hba_custom: "{{ pgbouncer_hba_custom + pg_hba_rules }}"
+        # Listen on all interfaces. By default, it listens on localhost only
+        pgbouncer_listen_addr: "*"
+      when: install_pgbouncer | default(False) | bool and pg_hba_rules | length > 0
+
+    - name: Print pgbouncer_hba_custom
+      debug:
+        var: pgbouncer_hba_custom
+      when: install_pgbouncer | default(False) | bool
+
+    - name: Print pgbouncer_hba_default
+      debug:
+        var: pgbouncer_hba_default
+
+  roles:
+    - role: 'pgbouncer'
+      when: install_pgbouncer | default(False) | bool
+
+  tags: 'pgbouncer'
+
+# ------------------------------------------------
+# Install redis
+# ------------------------------------------------
+- name: Install redis
+  hosts: redis
+  become: true
+  pre_tasks:
+    - name: Include custom vars
+      include_vars: override_vars/custom.yml
+      failed_when: false
+
+    - name: Define ip_address recorder and web hosts
+      set_fact:
+        ip_address: "{{ hostvars[item].private_ip_address }}"
+      with_items: "{{ groups.recorder + groups.web }}"
+      when: hostvars[item].private_ip_address != hostvars[inventory_hostname].private_ip_address
+      register: tmp_ip_addresses
+
+    - name: Render all_ip_addresses
+      set_fact:
+        all_ip_addresses: "{{ tmp_ip_addresses.results | selectattr('ansible_facts', 'defined') | map(attribute='ansible_facts.ip_address') | list }}"
+
+    - name: Define redis_bind
+      set_fact:
+        # Bind to all interfaces if other components are connecting to it remotely
+        redis_bind: 0.0.0.0
+      when: all_ip_addresses | length > 0
+
+    - name: Pring all_ip_addresses
+      debug:
+        var: all_ip_addresses
+
+    - name: Print redis_bind
+      debug:
+        var: redis_bind
+  roles:
+    - role: 'redis'
+  tags: 'redis'
+
+# ------------------------------------------------
+# Install Apache
+# ------------------------------------------------
+- name: Install Apache
+  hosts: web
+  become: true
+  pre_tasks:
+    - name: Include custom vars
+      include_vars: override_vars/custom.yml
+      failed_when: false
+  roles:
+    - role: 'apache'
+  tags: 'apache'
+
+
+# ------------------------------------------------
+# Install Python (web, celery, celerybeat)
+# ------------------------------------------------
+- name: Install Python
+  hosts:
+    - web
+    - celery
+    - celerybeat
+  become: true
+  pre_tasks:
+    - name: Include custom vars
+      include_vars: override_vars/custom.yml
+      failed_when: false
+
+    - set_fact:
+        python_install_from_source: "{{ python_install_from_source|default(true)|bool }}"
+
+  roles:
+    - role: 'python'
+  tags: 'python'
+
+# ------------------------------------------------
+# Install Sox (celery)
+# ------------------------------------------------
+- name: Install Sox
+  hosts:
+    - celery
+  become: true
+  pre_tasks:
+    - name: Include custom vars
+      include_vars: override_vars/custom.yml
+      failed_when: false
+  roles:
+    - role: 'sox'
+  tags: 'sox'
+
+# ------------------------------------------------
+# Install LetsEncrypt and generate certificates
+# ------------------------------------------------
+- name: Generate SSL Certificates using LetsEncrypt
+  hosts:
+    - web
+  pre_tasks:
+    - include_vars: override_vars/custom.yml
+      failed_when: false
+
+    - name: Discover python binary location
+      set_fact:
+        # Translate full python_version (3.10.5) to the MAJOR.MINOR value, like "3.10"
+        # Will set "certbot_python" to "python3.10"
+        certbot_python: "python{{ python_version|regex_replace('(\\d+\\.\\d+)\\..*$', '\\1') }}"
+      when: 
+        - python_version is defined
+        - python_install_from_source|default(true)|bool
+  roles:
+    - role: 'letsencrypt'
+  tags: 'letsencrypt'

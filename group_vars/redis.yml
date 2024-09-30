@@ -1,0 +1,16 @@
+---
+# -------------------------------
+# Redis settings
+# -------------------------------
+
+# Networking/connection options
+redis_bind: 127.0.0.1
+
+# Set this to true to validate redis tarball checksum against vars/main.yml
+redis_verify_checksum: true
+
+# Logging
+redis_logfile: "/var/log/redis/redis_{{ redis_port }}.log"
+
+# Enable syslog. "yes" or "no"
+redis_syslog_enabled: "no"

@@ -1,0 +1,12 @@
+---
+# ------------------------------------------------
+# Disable SELinux on all hosts
+# ------------------------------------------------
+- name: Disable SELinux
+ hosts: all
+ pre_tasks:
+   - include_vars: override_vars/custom.yml
+     failed_when: false
+ roles:
+   - role: 'disable-selinux'
+     tags: 'disable-selinux'
